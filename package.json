@@ -1,0 +1,14 @@
+{
+  "name": "bayeke-ai",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Байеке ИИ — түбір жоба",
+  "scripts": {
+    "install:all": "npm install --prefix backend",
+    "start": "npm start --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "db:init": "npm run db:init --prefix backend"
+  }
+}

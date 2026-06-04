@@ -1,0 +1,10 @@
+{
+  "name": "bayeke-ai-frontend",
+  "version": "2.0.0",
+  "description": "Байеке ИИ — фронтенд (HTML + Tailwind + JS)",
+  "private": true,
+  "scripts": {
+    "dev": "npx --yes serve -l 5173",
+    "start": "npx --yes serve -l 5173"
+  }
+}
