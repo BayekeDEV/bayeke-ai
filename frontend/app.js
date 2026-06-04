@@ -30,6 +30,18 @@ const elements = {
 
   submitBtn: document.getElementById("submit-btn"),
 
+  attachBtn: document.getElementById("attach-btn"),
+
+  imageInput: document.getElementById("image-input"),
+
+  imagePreview: document.getElementById("image-preview"),
+
+  imagePreviewThumb: document.getElementById("image-preview-thumb"),
+
+  imagePreviewName: document.getElementById("image-preview-name"),
+
+  imagePreviewRemove: document.getElementById("image-preview-remove"),
+
   errorBanner: document.getElementById("error-banner"),
 
   statusBadge: document.getElementById("status-badge"),
@@ -75,6 +87,13 @@ let serverStatus = null;
 let currentUser = null;
 
 let authMode = "login";
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const IMAGE_PLACEHOLDER = "[Сурет]";
+
+/** @type {{ mimeType: string, data: string, previewUrl: string, name: string } | null} */
+let pendingImage = null;
 
 
 
@@ -218,7 +237,93 @@ function updateSubmitState() {
 
   const hasText = elements.messageInput.value.trim().length > 0;
 
-  elements.submitBtn.disabled = !hasText || isLoading;
+  const hasImage = Boolean(pendingImage);
+
+  elements.submitBtn.disabled = (!hasText && !hasImage) || isLoading;
+
+  if (elements.attachBtn) {
+    elements.attachBtn.disabled = isLoading;
+  }
+
+}
+
+
+
+function clearPendingImage() {
+
+  if (pendingImage?.previewUrl) {
+    URL.revokeObjectURL(pendingImage.previewUrl);
+  }
+
+  pendingImage = null;
+
+  if (elements.imageInput) elements.imageInput.value = "";
+
+  elements.imagePreview?.classList.add("hidden");
+
+  updateSubmitState();
+
+}
+
+
+
+function showImagePreview(file, previewUrl) {
+
+  elements.imagePreviewThumb.src = previewUrl;
+
+  elements.imagePreviewThumb.alt = file.name;
+
+  elements.imagePreviewName.textContent = file.name;
+
+  elements.imagePreview.classList.remove("hidden");
+
+}
+
+
+
+async function handleImageFile(file) {
+
+  if (!file) return;
+
+  hideError();
+
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    showError("Тек JPEG, PNG, WebP немесе GIF жіберуге болады.");
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    showError("Сурет 4 МБ-тан аспауы керек.");
+    return;
+  }
+
+  const data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("read failed"));
+        return;
+      }
+      const base64 = result.replace(/^data:[^;]+;base64,/, "");
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  clearPendingImage();
+
+  const previewUrl = URL.createObjectURL(file);
+  pendingImage = {
+    mimeType: file.type,
+    data,
+    previewUrl,
+    name: file.name,
+  };
+
+  showImagePreview(file, previewUrl);
+  updateSubmitState();
 
 }
 
@@ -552,7 +657,24 @@ function createMessageElement(role, content, options = {}) {
 
     contentEl.className = "message-content";
 
-    contentEl.innerHTML = formatMessageHtml(content);
+    if (options.image?.data && options.image?.mimeType) {
+      const img = document.createElement("img");
+      img.className = "message-image";
+      img.alt = "Жіберілген сурет";
+      img.src = `data:${options.image.mimeType};base64,${options.image.data}`;
+      contentEl.appendChild(img);
+    }
+
+    const text =
+      typeof content === "string" && content.trim() !== IMAGE_PLACEHOLDER
+        ? content
+        : "";
+
+    if (text) {
+      const textEl = document.createElement("div");
+      textEl.innerHTML = formatMessageHtml(text);
+      contentEl.appendChild(textEl);
+    }
 
     bubble.appendChild(contentEl);
 
@@ -688,7 +810,7 @@ function renderMessages() {
 
     elements.messagesList.appendChild(
 
-      createMessageElement(msg.role, msg.content)
+      createMessageElement(msg.role, msg.content, { image: msg.image })
 
     );
 
@@ -854,7 +976,11 @@ async function sendMessage(text) {
 
   const trimmed = text.trim();
 
-  if (!trimmed || isLoading) return;
+  const imagePayload = pendingImage
+    ? { mimeType: pendingImage.mimeType, data: pendingImage.data }
+    : null;
+
+  if ((!trimmed && !imagePayload) || isLoading) return;
 
 
 
@@ -868,7 +994,11 @@ async function sendMessage(text) {
 
 
 
-  chat.messages.push({ role: "user", content: trimmed });
+  chat.messages.push({
+    role: "user",
+    content: trimmed || IMAGE_PLACEHOLDER,
+    image: imagePayload,
+  });
 
   isLoading = true;
 
@@ -880,13 +1010,15 @@ async function sendMessage(text) {
 
   elements.messageInput.value = "";
 
+  clearPendingImage();
+
   autoResizeInput();
 
 
 
   try {
 
-    const data = await api.sendMessage(chat.id, trimmed);
+    const data = await api.sendMessage(chat.id, trimmed, imagePayload);
 
     activeChat = data.chat;
 
@@ -981,6 +1113,17 @@ elements.messageInput.addEventListener("keydown", (e) => {
 
 
 elements.newChatBtn.addEventListener("click", startNewChat);
+
+elements.attachBtn?.addEventListener("click", () => {
+  if (!isLoading) elements.imageInput?.click();
+});
+
+elements.imageInput?.addEventListener("change", () => {
+  const file = elements.imageInput.files?.[0];
+  if (file) handleImageFile(file);
+});
+
+elements.imagePreviewRemove?.addEventListener("click", clearPendingImage);
 
 elements.sidebarOpen.addEventListener("click", openSidebar);
 

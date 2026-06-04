@@ -31,12 +31,40 @@ function mapChat(doc) {
 }
 
 function mapMessage(doc) {
-  return {
+  const msg = {
     id: doc._id.toString(),
     role: doc.role,
     content: doc.content,
     createdAt: doc.created_at,
   };
+  if (doc.image_mime && doc.image_data) {
+    msg.image = { mimeType: doc.image_mime, data: doc.image_data };
+  }
+  return msg;
+}
+
+function buildMongoUri() {
+  const user = process.env.MONGODB_USER?.trim();
+  const pass = process.env.MONGODB_PASSWORD?.trim();
+  const host =
+    process.env.MONGODB_HOST?.trim() || "cluster0.60pyelx.mongodb.net";
+  const dbName = process.env.MONGODB_DB_NAME?.trim() || "bayeke";
+
+  if (user && pass) {
+    return `mongodb+srv://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}/${dbName}?retryWrites=true&w=majority&authSource=admin`;
+  }
+
+  let url = DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL немесе MONGODB_USER/PASSWORD қойылмаған");
+
+  if (url.includes("<") || url.includes(">")) {
+    throw new Error("DATABASE_URL-де <db_username> placeholder қалған — нақты пароль қойыңыз");
+  }
+
+  if (!url.includes("authSource=")) {
+    url += url.includes("?") ? "&authSource=admin" : "?authSource=admin";
+  }
+  return url;
 }
 
 function resolveDbName(url) {
@@ -46,9 +74,13 @@ function resolveDbName(url) {
 }
 
 export async function initMongo() {
-  client = new MongoClient(DATABASE_URL);
+  const uri = buildMongoUri();
+  client = new MongoClient(uri, {
+    serverSelectionTimeoutMS: 15000,
+    connectTimeoutMS: 15000,
+  });
   await client.connect();
-  const dbName = resolveDbName(DATABASE_URL);
+  const dbName = resolveDbName(uri);
   db = client.db(dbName);
   console.log(`  MongoDB база: ${dbName}`);
 
@@ -183,7 +215,7 @@ export async function deleteChat(userId, chatId) {
   return true;
 }
 
-export async function addMessage(userId, chatId, role, content) {
+export async function addMessage(userId, chatId, role, content, image = null) {
   const oid = toId(chatId);
   if (!oid) return null;
 
@@ -198,6 +230,10 @@ export async function addMessage(userId, chatId, role, content) {
     content,
     created_at: now,
   };
+  if (image?.mimeType && image?.data) {
+    doc.image_mime = image.mimeType;
+    doc.image_data = image.data;
+  }
   const result = await messagesCol().insertOne(doc);
 
   await chatsCol().updateOne(
@@ -205,12 +241,16 @@ export async function addMessage(userId, chatId, role, content) {
     { $set: { updated_at: now } }
   );
 
-  return {
+  const saved = {
     id: result.insertedId.toString(),
     role: doc.role,
     content: doc.content,
     createdAt: doc.created_at,
   };
+  if (doc.image_mime && doc.image_data) {
+    saved.image = { mimeType: doc.image_mime, data: doc.image_data };
+  }
+  return saved;
 }
 
 export async function getMessagesForChat(userId, chatId) {

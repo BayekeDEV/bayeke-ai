@@ -46,5 +46,8 @@ main().catch((err) => {
   if (err.message?.includes("auth") || err.message?.includes("Authentication")) {
     console.error("→ DATABASE_URL: username/password дұрыс па? Парольде @ # болsa URL encode");
   }
+  if (err.message?.includes("SSL") || err.message?.includes("tls")) {
+    console.error("→ MongoDB SSL қате: парольді encode etіңіз немесе Render-де MONGODB_USER + MONGODB_PASSWORD қолданыңыз");
+  }
   process.exit(1);
 });

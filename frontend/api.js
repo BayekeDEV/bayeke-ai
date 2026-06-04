@@ -218,16 +218,13 @@ export const api = {
 
 
 
-  sendMessage(chatId, message) {
-
+  sendMessage(chatId, message, image = null) {
+    const body = { message: message || "" };
+    if (image) body.image = image;
     return request(`/api/chats/${chatId}/messages`, {
-
       method: "POST",
-
-      body: JSON.stringify({ message }),
-
+      body: JSON.stringify(body),
     });
-
   },
 
 };

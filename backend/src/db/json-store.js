@@ -81,12 +81,18 @@ export async function getChat(sessionId, chatId) {
   const messages = db.messages
     .filter((m) => m.chat_id === chatId)
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.created_at,
-    }));
+    .map((m) => {
+      const msg = {
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.created_at,
+      };
+      if (m.image_mime && m.image_data) {
+        msg.image = { mimeType: m.image_mime, data: m.image_data };
+      }
+      return msg;
+    });
 
   return {
     id: chat.id,
@@ -120,7 +126,7 @@ export async function deleteChat(sessionId, chatId) {
   return db.chats.length < before;
 }
 
-export async function addMessage(sessionId, chatId, role, content) {
+export async function addMessage(sessionId, chatId, role, content, image = null) {
   const db = await readDb();
   const chat = db.chats.find(
     (c) => c.id === chatId && c.session_id === sessionId
@@ -135,16 +141,24 @@ export async function addMessage(sessionId, chatId, role, content) {
     content,
     created_at: now,
   };
+  if (image?.mimeType && image?.data) {
+    message.image_mime = image.mimeType;
+    message.image_data = image.data;
+  }
   db.messages.push(message);
   chat.updated_at = now;
   await writeDb(db);
 
-  return {
+  const saved = {
     id: message.id,
     role: message.role,
     content: message.content,
     createdAt: message.created_at,
   };
+  if (message.image_mime && message.image_data) {
+    saved.image = { mimeType: message.image_mime, data: message.image_data };
+  }
+  return saved;
 }
 
 export async function getMessagesForChat(sessionId, chatId) {
