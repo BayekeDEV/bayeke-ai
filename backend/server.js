@@ -1,13 +1,52 @@
 import { createApp } from "./src/app.js";
 import { initDatabase, shutdownDatabase } from "./src/db/index.js";
-import { PORT } from "./src/config.js";
+import { PORT, isAiConfigured, isGroqConfigured } from "./src/config.js";
+import { checkAiConnection, getActiveProvider } from "./src/services/ai.js";
+import { formatQuotaHelp } from "./src/services/gemini.js";
 
 const HOST = process.env.HOST || "0.0.0.0";
 
+async function logAiStatus() {
+  if (!isAiConfigured()) {
+    console.warn("⚠ ИИ кілті жоқ — GROQ_API_KEY (console.groq.com) немесе GEMINI_API_KEY қойыңыз.");
+    return;
+  }
+
+  const provider = getActiveProvider();
+  console.log(`ИИ провайдер: ${provider}`);
+  const result = await checkAiConnection();
+
+  if (result.ok) {
+    console.log(`✓ ИИ дайын (${provider}, модель: ${result.model})`);
+    return;
+  }
+
+  if (result.reason === "invalid_key") {
+    console.error(`✗ ${provider} кілті жарамсыз.`);
+    if (provider === "groq") {
+      console.error("  → https://console.groq.com/keys");
+    } else {
+      console.error("  → https://aistudio.google.com/apikey");
+    }
+    return;
+  }
+
+  if (result.reason === "quota") {
+    console.error(`✗ ${provider} лимиті / квота:`);
+    if (result.error) console.error(`  ${formatQuotaHelp(result.error)}`);
+    if (provider === "gemini" && !isGroqConfigured()) {
+      console.error("  → Шешім: console.groq.com/keys → GROQ_API_KEY + AI_PROVIDER=groq");
+    }
+    return;
+  }
+
+  console.warn("⚠ ИИ қазір қолжетімсіз.");
+}
+
 async function main() {
   await initDatabase();
+  await logAiStatus();
   const app = createApp();
-
   const server = app.listen(PORT, HOST, () => {
     console.log(`Байеке ИИ бекенд: http://localhost:${PORT}`);
     console.log(`Фон: http://${HOST}:${PORT}`);

@@ -348,8 +348,11 @@ function updateStatusBadge() {
   const dbLabel = dbLabels[serverStatus.database] || serverStatus.database;
 
   const aiLabel =
-
-    serverStatus.gemini === "configured" ? "ИИ дайын" : "ИИ кілті жоқ";
+    serverStatus.ai === "configured"
+      ? serverStatus.aiProvider === "groq"
+        ? "Groq ИИ"
+        : "Gemini ИИ"
+      : "ИИ кілті жоқ";
 
 
 

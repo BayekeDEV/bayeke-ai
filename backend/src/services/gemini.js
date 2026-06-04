@@ -8,6 +8,7 @@ import {
 } from "../config.js";
 
 const IMAGE_PLACEHOLDER = "[Сурет]";
+const MAX_HISTORY_MESSAGES = 12;
 
 function buildParts(text, image) {
   const parts = [];
@@ -28,10 +29,20 @@ function buildParts(text, image) {
   return parts;
 }
 
-function mapHistoryToContents(history) {
+function trimHistory(history) {
   if (!Array.isArray(history)) return [];
 
-  return history
+  return history.slice(-MAX_HISTORY_MESSAGES).map((item) => {
+    if (!item?.image?.data) return item;
+    return {
+      role: item.role,
+      content: item.content,
+    };
+  });
+}
+
+function mapHistoryToContents(history) {
+  return trimHistory(history)
     .filter(
       (item) =>
         item &&
@@ -60,10 +71,14 @@ function getErrorStatus(err) {
   return typeof status === "number" ? status : null;
 }
 
+function getErrorMessage(err) {
+  return (err?.message || String(err)).toLowerCase();
+}
+
 function isQuotaError(err) {
   const status = getErrorStatus(err);
   if (status === 429) return true;
-  const message = (err?.message || String(err)).toLowerCase();
+  const message = getErrorMessage(err);
   return (
     message.includes("quota") ||
     message.includes("rate limit") ||
@@ -74,9 +89,30 @@ function isQuotaError(err) {
   );
 }
 
+function isZeroQuotaError(err) {
+  const message = getErrorMessage(err);
+  return message.includes("limit: 0") || message.includes("limit:0");
+}
+
+export { isQuotaError };
+
+export function formatQuotaHelp(err) {
+  if (isZeroQuotaError(err)) {
+    return (
+      "Google аккаунтыңызда тегін Gemini квотасы жоқ (limit: 0). " +
+      "Groq қолданыңыз: console.groq.com/keys → GROQ_API_KEY, .env-ке AI_PROVIDER=groq"
+    );
+  }
+
+  return (
+    "Gemini API лимиті аяқталды. 1–2 минут күтіңіз. " +
+    "Render + localhost бір кілтпен жұмыс істемесin."
+  );
+}
+
 export function buildGeminiClientError(err) {
   const status = getErrorStatus(err);
-  const message = (err?.message || String(err)).toLowerCase();
+  const message = getErrorMessage(err);
 
   if (
     status === 401 ||
@@ -90,7 +126,7 @@ export function buildGeminiClientError(err) {
       httpStatus: 401,
       body: {
         error:
-          "Gemini API кілті жарамсыз. backend/.env файлындағы GEMINI_API_KEY тексеріңіз.",
+          "Gemini API кілті жарамсыз. aistudio.google.com/apikey сайтынан AIzaSy... кілт алыңыз.",
       },
     };
   }
@@ -99,8 +135,7 @@ export function buildGeminiClientError(err) {
     return {
       httpStatus: 429,
       body: {
-        error:
-          "Google Gemini тегін лимиті аяқталды. 1–2 минут күтіңіз немесе aistudio.google.com/apikey сайтында жаңа кілт алыңыз. Render + жергілікті бір кілтпен жұмыс істесе лимит тез бітеді.",
+        error: formatQuotaHelp(err),
       },
     };
   }
@@ -112,6 +147,52 @@ export function buildGeminiClientError(err) {
       details: err?.message || "Unknown error",
     },
   };
+}
+
+async function callModel(ai, model, contents) {
+  const response = await ai.models.generateContent({
+    model,
+    contents,
+    config: { systemInstruction: SYSTEM_INSTRUCTION },
+  });
+
+  const reply = response?.text?.trim();
+  if (!reply) {
+    const err = new Error("EMPTY_RESPONSE");
+    err.code = "EMPTY_RESPONSE";
+    throw err;
+  }
+
+  return reply;
+}
+
+export async function checkGeminiConnection() {
+  if (!isApiKeyConfigured()) {
+    return { ok: false, reason: "missing_key" };
+  }
+
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const models = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
+    (m, i, arr) => m && arr.indexOf(m) === i
+  );
+
+  for (const model of models) {
+    try {
+      await callModel(ai, model, [
+        { role: "user", parts: [{ text: "ping" }] },
+      ]);
+      return { ok: true, model };
+    } catch (err) {
+      if (getErrorStatus(err) === 401 || getErrorStatus(err) === 403) {
+        return { ok: false, reason: "invalid_key", model, error: err };
+      }
+      if (isQuotaError(err)) {
+        return { ok: false, reason: "quota", model, error: err };
+      }
+    }
+  }
+
+  return { ok: false, reason: "unavailable" };
 }
 
 export async function generateReply(message, history = [], image = null) {
@@ -134,38 +215,19 @@ export async function generateReply(message, history = [], image = null) {
     { role: "user", parts: userParts },
   ];
 
-  const models = [GEMINI_MODEL];
-  if (GEMINI_FALLBACK_MODEL && GEMINI_FALLBACK_MODEL !== GEMINI_MODEL) {
-    models.push(GEMINI_FALLBACK_MODEL);
-  }
+  const models = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
+    (m, i, arr) => m && arr.indexOf(m) === i
+  );
 
   let lastErr;
   for (const model of models) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents,
-          config: { systemInstruction: SYSTEM_INSTRUCTION },
-        });
-
-        const reply = response?.text?.trim();
-        if (!reply) {
-          const err = new Error("EMPTY_RESPONSE");
-          err.code = "EMPTY_RESPONSE";
-          throw err;
-        }
-
-        return reply;
-      } catch (err) {
-        lastErr = err;
-        const status = getErrorStatus(err);
-        if (status === 401 || status === 403) throw err;
-        if (isQuotaError(err)) break;
-        if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, attempt * 800));
-        }
-      }
+    try {
+      return await callModel(ai, model, contents);
+    } catch (err) {
+      lastErr = err;
+      const status = getErrorStatus(err);
+      if (status === 401 || status === 403) throw err;
+      if (!isQuotaError(err)) throw err;
     }
   }
 

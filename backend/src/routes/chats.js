@@ -8,8 +8,11 @@ import {
   deleteChat,
   addMessage,
 } from "../db/index.js";
-import { generateReply, buildGeminiClientError } from "../services/gemini.js";
-import { isApiKeyConfigured } from "../config.js";
+import {
+  generateReply,
+  buildAiClientError,
+  isAiConfigured,
+} from "../services/ai.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
@@ -116,10 +119,10 @@ router.delete("/chats/:id", async (req, res, next) => {
 
 router.post("/chats/:id/messages", async (req, res, next) => {
   try {
-    if (!isApiKeyConfigured()) {
+    if (!isAiConfigured()) {
       return res.status(500).json({
         error:
-          "GEMINI_API_KEY орнатылмаған. backend/.env файлында кілтті қойыңыз.",
+          "ИИ кілті орнатылмаған. .env файлына GROQ_API_KEY (console.groq.com) немесе GEMINI_API_KEY қойыңыз.",
       });
     }
 
@@ -163,12 +166,14 @@ router.post("/chats/:id/messages", async (req, res, next) => {
       replyText = await generateReply(rawMessage, history, image);
     } catch (err) {
       if (err.code === "API_KEY_MISSING") {
-        return res.status(500).json({ error: "GEMINI_API_KEY орнатылмаған." });
+        return res.status(500).json({
+          error: "ИИ кілті орнатылмаған. GROQ_API_KEY немесе GEMINI_API_KEY қойыңыз.",
+        });
       }
       if (err.code === "EMPTY_RESPONSE") {
         return res.status(502).json({ error: "Модель бос жауап қайтарды." });
       }
-      const { httpStatus, body } = buildGeminiClientError(err);
+      const { httpStatus, body } = buildAiClientError(err);
       return res.status(httpStatus).json(body);
     }
 
