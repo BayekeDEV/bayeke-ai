@@ -39,14 +39,27 @@ function mapMessage(doc) {
   };
 }
 
+function resolveDbName(url) {
+  const match = url.match(/\.mongodb\.net\/([^/?]+)/);
+  if (match?.[1]) return match[1];
+  return process.env.MONGODB_DB_NAME || "bayeke";
+}
+
 export async function initMongo() {
   client = new MongoClient(DATABASE_URL);
   await client.connect();
-  db = client.db();
+  const dbName = resolveDbName(DATABASE_URL);
+  db = client.db(dbName);
+  console.log(`  MongoDB база: ${dbName}`);
 
-  await users().createIndex({ email: 1 }, { unique: true });
-  await chatsCol().createIndex({ user_id: 1, updated_at: -1 });
-  await messagesCol().createIndex({ chat_id: 1, created_at: 1 });
+  try {
+    await users().createIndex({ email: 1 }, { unique: true });
+    await chatsCol().createIndex({ user_id: 1, updated_at: -1 });
+    await messagesCol().createIndex({ chat_id: 1, created_at: 1 });
+  } catch (err) {
+    console.warn("⚠ Index creation:", err.message);
+    console.warn("  Atlas user-ге readWrite рұқсаты керек");
+  }
 
   return { mode: "mongodb" };
 }

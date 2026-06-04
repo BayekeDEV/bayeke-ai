@@ -67,11 +67,9 @@ export async function initDatabase() {
         return { mode: dbMode };
 
       } catch (err) {
-
         console.error("✗ MongoDB қосылмады:", err.message);
-
+        console.error("  Тексеріңіз: DATABASE_URL, пароль, Atlas Network Access (0.0.0.0/0)");
         throw err;
-
       }
 
     }

@@ -42,6 +42,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Сервер іске қосылмады:", err);
+  console.error("Сервер іске қосылмады:", err.message || err);
+  if (err.message?.includes("auth") || err.message?.includes("Authentication")) {
+    console.error("→ DATABASE_URL: username/password дұрыс па? Парольде @ # болsa URL encode");
+  }
   process.exit(1);
 });
