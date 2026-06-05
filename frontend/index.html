@@ -426,6 +426,35 @@
         border: 1px solid rgba(255, 255, 255, 0.12);
       }
 
+      #auth-form input,
+      #chat-search-input {
+        background: rgba(15, 22, 38, 0.85) !important;
+        color: #f1f5f9 !important;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        caret-color: #93c5fd;
+      }
+
+      #auth-form input::placeholder,
+      #chat-search-input::placeholder {
+        color: rgba(255, 255, 255, 0.35) !important;
+      }
+
+      #auth-form input:focus,
+      #chat-search-input:focus {
+        border-color: rgba(147, 197, 253, 0.45);
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
+        outline: none;
+      }
+
+      #auth-form input:-webkit-autofill,
+      #auth-form input:-webkit-autofill:hover,
+      #auth-form input:-webkit-autofill:focus {
+        -webkit-text-fill-color: #f1f5f9 !important;
+        -webkit-box-shadow: 0 0 0 1000px rgba(15, 22, 38, 0.95) inset !important;
+        box-shadow: 0 0 0 1000px rgba(15, 22, 38, 0.95) inset !important;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+
       @media (max-width: 768px) {
         #sidebar.open { transform: translateX(0); }
         #sidebar { transform: translateX(-100%); }
@@ -782,15 +811,15 @@
         <form id="auth-form" class="space-y-4">
           <div id="auth-name-wrap" class="hidden">
             <label for="auth-name" class="block text-xs text-white/45 mb-1.5">Аты</label>
-            <input id="auth-name" type="text" autocomplete="name" placeholder="Атыңыз" class="w-full px-3 py-2.5 text-sm rounded-xl bg-white/8 border border-white/12 text-white placeholder-white/30 outline-none focus:border-white/25" />
+            <input id="auth-name" type="text" autocomplete="name" placeholder="Атыңыз" class="auth-input w-full px-3 py-2.5 text-sm rounded-xl outline-none" />
           </div>
           <div>
             <label for="auth-email" class="block text-xs text-white/45 mb-1.5">Email</label>
-            <input id="auth-email" type="email" required autocomplete="email" placeholder="email@example.com" class="w-full px-3 py-2.5 text-sm rounded-xl bg-white/8 border border-white/12 text-white placeholder-white/30 outline-none focus:border-white/25" />
+            <input id="auth-email" type="email" required autocomplete="email" placeholder="email@example.com" class="auth-input w-full px-3 py-2.5 text-sm rounded-xl outline-none" />
           </div>
           <div>
             <label for="auth-password" class="block text-xs text-white/45 mb-1.5">Құпия сөз</label>
-            <input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="Кемінде 6 таңба" class="w-full px-3 py-2.5 text-sm rounded-xl bg-white/8 border border-white/12 text-white placeholder-white/30 outline-none focus:border-white/25" />
+            <input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="Кемінде 6 таңба" class="auth-input w-full px-3 py-2.5 text-sm rounded-xl outline-none" />
           </div>
           <p id="auth-error" class="hidden text-sm text-red-300"></p>
           <button id="auth-submit" type="submit" class="w-full py-2.5 text-sm font-medium rounded-xl bg-white/20 text-white hover:bg-white/28 disabled:opacity-50 transition-colors border border-white/15">Кіру</button>
