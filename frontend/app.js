@@ -70,9 +70,77 @@ const elements = {
 
   logoutBtn: document.getElementById("logout-btn"),
 
+  shareBtn: document.getElementById("share-btn"),
+
   userInfo: document.getElementById("user-info"),
 
+  userEmail: document.getElementById("user-email"),
+
+  chatSearchWrap: document.getElementById("chat-search-wrap"),
+
+  chatSearchInput: document.getElementById("chat-search-input"),
+
+  searchChatsBtn: document.getElementById("search-chats-btn"),
+
+  clearAllChatsBtn: document.getElementById("clear-all-chats-btn"),
+
+  profileFooter: document.getElementById("profile-footer"),
+
+  profileToggle: document.getElementById("profile-toggle"),
+
+  profileMenu: document.getElementById("profile-menu"),
+
+  profileAvatar: document.getElementById("profile-avatar"),
+
+  profileName: document.getElementById("profile-name"),
+
+  profileEmail: document.getElementById("profile-email"),
+
+  profileChevron: document.getElementById("profile-chevron"),
+
+  menuAccount: document.getElementById("menu-account"),
+
+  menuSettings: document.getElementById("menu-settings"),
+
+  menuLogout: document.getElementById("menu-logout"),
+
+  accountModal: document.getElementById("account-modal"),
+
+  settingsModal: document.getElementById("settings-modal"),
+
+  accountAvatar: document.getElementById("account-avatar"),
+
+  accountName: document.getElementById("account-name"),
+
+  accountEmail: document.getElementById("account-email"),
+
+  accountId: document.getElementById("account-id"),
+
+  accountAi: document.getElementById("account-ai"),
+
+  accountChatsCount: document.getElementById("account-chats-count"),
+
+  accountCopyEmail: document.getElementById("account-copy-email"),
+
+  settingsAiModel: document.getElementById("settings-ai-model"),
+
+  settingsClearChats: document.getElementById("settings-clear-chats"),
+
+  settingsLogout: document.getElementById("settings-logout"),
+
+  toggleEnterSend: document.getElementById("toggle-enter-send"),
+
 };
+
+const SHIELD_SVG = `<svg class="shield-icon w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>`;
+
+const SETTINGS_KEY = "bayeke-settings";
+
+let chatSearchQuery = "";
+
+let profileMenuOpen = false;
+
+let settings = { enterToSend: true };
 
 
 
@@ -97,21 +165,121 @@ let pendingImage = null;
 
 
 
-function escapeHtml(text) {
-
-  return text
-
-    .replace(/&/g, "&amp;")
-
-    .replace(/</g, "&lt;")
-
-    .replace(/>/g, "&gt;")
-
-    .replace(/"/g, "&quot;");
-
+function getInitials(user) {
+  if (user?.name?.trim()) {
+    return user.name
+      .trim()
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }
+  if (user?.email) return user.email[0].toUpperCase();
+  return "?";
 }
 
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    settings = { enterToSend: saved.enterToSend !== false };
+  } catch {
+    settings = { enterToSend: true };
+  }
+  syncSettingsUI();
+}
 
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  syncSettingsUI();
+}
+
+function syncSettingsUI() {
+  if (elements.toggleEnterSend) {
+    elements.toggleEnterSend.classList.toggle("on", settings.enterToSend);
+    elements.toggleEnterSend.setAttribute("aria-checked", String(settings.enterToSend));
+  }
+}
+
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("hidden");
+  closeProfileMenu();
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add("hidden");
+}
+
+function closeAllModals() {
+  document.querySelectorAll(".modal-overlay").forEach((m) => m.classList.add("hidden"));
+}
+
+function toggleProfileMenu() {
+  profileMenuOpen = !profileMenuOpen;
+  elements.profileMenu?.classList.toggle("hidden", !profileMenuOpen);
+  elements.profileChevron?.classList.toggle("rotate-180", profileMenuOpen);
+}
+
+function closeProfileMenu() {
+  profileMenuOpen = false;
+  elements.profileMenu?.classList.add("hidden");
+  elements.profileChevron?.classList.remove("rotate-180");
+}
+
+function fillAccountModal() {
+  if (!currentUser) return;
+  const initials = getInitials(currentUser);
+  if (elements.accountAvatar) elements.accountAvatar.textContent = initials;
+  if (elements.accountName) elements.accountName.textContent = currentUser.name || "Пайдаланушы";
+  if (elements.accountEmail) elements.accountEmail.textContent = currentUser.email;
+  if (elements.accountId) elements.accountId.textContent = currentUser.id || "—";
+  if (elements.accountAi) {
+    const p = serverStatus?.aiProvider === "groq" ? "Groq" : serverStatus?.aiProvider === "gemini" ? "Gemini" : "—";
+    elements.accountAi.textContent = p;
+  }
+  if (elements.accountChatsCount) elements.accountChatsCount.textContent = String(chats.length);
+  if (elements.settingsAiModel) {
+    elements.settingsAiModel.textContent = serverStatus?.aiProvider === "groq" ? "Groq (llama)" : serverStatus?.aiProvider === "gemini" ? "Gemini" : "—";
+  }
+}
+
+async function deleteAllChats() {
+  if (!chats.length) return;
+  if (!confirm(`Барлық ${chats.length} чатты жою керек пе?`)) return;
+  const ids = [...chats.map((c) => c.id)];
+  for (const id of ids) {
+    await api.deleteChat(id);
+  }
+  chats = [];
+  activeChat = null;
+  await startNewChat();
+  render();
+}
+
+function toggleChatSearch() {
+  const wrap = elements.chatSearchWrap;
+  if (!wrap) return;
+  const show = wrap.classList.contains("hidden");
+  wrap.classList.toggle("hidden", !show);
+  elements.searchChatsBtn?.classList.toggle("active", show);
+  if (show) {
+    elements.chatSearchInput?.focus();
+  } else {
+    chatSearchQuery = "";
+    if (elements.chatSearchInput) elements.chatSearchInput.value = "";
+    renderHistory();
+  }
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 function formatMessageHtml(text) {
 
@@ -429,17 +597,17 @@ function setAuthMode(mode) {
 
 
   elements.authTabLogin.className = [
-    "auth-tab flex-1 py-2 text-sm font-medium rounded-md transition-colors",
+    "auth-tab flex-1 py-2 text-sm font-medium rounded-lg transition-colors",
     isRegister
-      ? "text-ink-muted hover:text-ink-soft"
-      : "bg-cream text-ink shadow-sm",
+      ? "text-white/50 hover:text-white/80"
+      : "bg-white/15 text-white",
   ].join(" ");
 
   elements.authTabRegister.className = [
-    "auth-tab flex-1 py-2 text-sm font-medium rounded-md transition-colors",
+    "auth-tab flex-1 py-2 text-sm font-medium rounded-lg transition-colors",
     isRegister
-      ? "bg-cream text-ink shadow-sm"
-      : "text-ink-muted hover:text-ink-soft",
+      ? "bg-white/15 text-white"
+      : "text-white/50 hover:text-white/80",
   ].join(" ");
 
 
@@ -458,11 +626,21 @@ function updateUserUI() {
 
     elements.logoutBtn?.classList.remove("hidden");
 
-    if (elements.userInfo) {
+    elements.logoutBtn?.classList.add("flex");
 
-      elements.userInfo.textContent = currentUser.email;
+    elements.profileFooter?.classList.remove("hidden");
 
+    const initials = getInitials(currentUser);
+
+    if (elements.profileAvatar) elements.profileAvatar.textContent = initials;
+
+    if (elements.profileName) {
+      elements.profileName.textContent = currentUser.name || currentUser.email.split("@")[0];
     }
+
+    if (elements.profileEmail) elements.profileEmail.textContent = currentUser.email;
+
+    if (elements.userEmail) elements.userEmail.textContent = currentUser.email;
 
     hideAuthOverlay();
 
@@ -471,6 +649,12 @@ function updateUserUI() {
     elements.userInfo?.classList.add("hidden");
 
     elements.logoutBtn?.classList.add("hidden");
+
+    elements.logoutBtn?.classList.remove("flex");
+
+    elements.profileFooter?.classList.add("hidden");
+
+    closeProfileMenu();
 
     showAuthOverlay();
 
@@ -614,28 +798,24 @@ function createMessageElement(role, content, options = {}) {
 
   const wrapper = document.createElement("div");
 
-  wrapper.className = `flex gap-3 ${isUser ? "flex-row-reverse" : ""}`;
-
-
+  wrapper.className = `flex gap-2.5 items-end ${isUser ? "flex-row-reverse" : ""}`;
 
   const avatar = document.createElement("div");
 
-  avatar.className = [
-    "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 text-xs font-semibold border",
-    isUser
-      ? "bg-sage-muted/80 text-sage border-sage/30"
-      : "bg-sky-soft/60 text-sky-700 border-sky-soft/50",
-  ].join(" ");
-
-  avatar.textContent = isUser ? "Сіз" : "БИ";
-
-
+  if (isUser) {
+    avatar.className =
+      "flex items-center justify-center shrink-0 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/15 text-white/70 border border-white/15";
+    avatar.textContent = "Сіз";
+  } else {
+    avatar.className = "shrink-0";
+    avatar.innerHTML = SHIELD_SVG;
+  }
 
   const bubble = document.createElement("div");
 
   bubble.className = [
-    "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
-    isUser ? "bubble-user rounded-br-md" : "bubble-assistant rounded-bl-md",
+    "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+    isUser ? "bubble-user rounded-2xl" : "bubble-assistant rounded-2xl",
   ].join(" ");
 
 
@@ -699,13 +879,17 @@ function renderHistory() {
 
   elements.chatHistory.innerHTML = "";
 
+  const q = chatSearchQuery.trim().toLowerCase();
 
+  const filtered = q
+    ? chats.filter((c) => (c.title || "").toLowerCase().includes(q))
+    : chats;
 
-  if (!chats.length) {
+  if (!filtered.length) {
 
-    elements.chatHistory.innerHTML =
-
-      '<p class="px-3 py-2 text-xs text-ink-muted">Әлі чат жоқ</p>';
+    elements.chatHistory.innerHTML = q
+      ? '<p class="px-3 py-2 text-xs text-white/35">Чат табылмады</p>'
+      : '<p class="px-3 py-2 text-xs text-white/35">Әлі чат жоқ</p>';
 
     return;
 
@@ -713,7 +897,7 @@ function renderHistory() {
 
 
 
-  chats.forEach((chat) => {
+  filtered.forEach((chat) => {
 
     const row = document.createElement("div");
 
@@ -726,10 +910,10 @@ function renderHistory() {
     btn.type = "button";
 
     btn.className = [
-      "flex-1 text-left px-3 py-2.5 rounded-lg text-sm truncate transition-colors",
+      "flex-1 text-left px-3 py-2.5 rounded-xl text-sm truncate transition-colors border border-transparent",
       activeChat?.id === chat.id
-        ? "bg-cream/80 text-ink border border-copper/30 shadow-sm"
-        : "text-ink-muted hover:bg-cream/50 hover:text-ink-soft",
+        ? "history-active"
+        : "text-white/50 hover:bg-white/8 hover:text-white/80",
     ].join(" ");
 
     btn.textContent = chat.title || "Жаңа сөйлесу";
@@ -745,7 +929,7 @@ function renderHistory() {
     delBtn.type = "button";
 
     delBtn.className =
-      "opacity-0 group-hover:opacity-100 p-2 rounded-lg text-ink-muted hover:text-red-600 hover:bg-cream/60 shrink-0 transition-opacity";
+      "opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-red-300 hover:bg-white/10 shrink-0 transition-opacity";
 
     delBtn.setAttribute("aria-label", "Жою");
 
@@ -791,7 +975,7 @@ function renderMessages() {
 
     elements.messagesList.innerHTML = "";
 
-    elements.chatTitle.textContent = activeChat?.title || "Жаңа сөйлесу";
+    elements.chatTitle.textContent = "Байеке ИИ";
 
     return;
 
@@ -805,7 +989,7 @@ function renderMessages() {
 
   elements.messagesList.innerHTML = "";
 
-  elements.chatTitle.textContent = activeChat?.title || "Жаңа сөйлесу";
+  elements.chatTitle.textContent = "Байеке ИИ";
 
 
 
@@ -872,6 +1056,8 @@ async function loadHealth() {
   serverStatus = await api.health();
 
   updateStatusBadge();
+
+  fillAccountModal();
 
 }
 
@@ -1099,7 +1285,7 @@ elements.messageInput.addEventListener("input", () => {
 
 elements.messageInput.addEventListener("keydown", (e) => {
 
-  if (e.key === "Enter" && !e.shiftKey) {
+  if (e.key === "Enter" && !e.shiftKey && settings.enterToSend) {
 
     e.preventDefault();
 
@@ -1114,6 +1300,99 @@ elements.messageInput.addEventListener("keydown", (e) => {
 });
 
 
+
+elements.searchChatsBtn?.addEventListener("click", toggleChatSearch);
+
+elements.chatSearchInput?.addEventListener("input", () => {
+  chatSearchQuery = elements.chatSearchInput.value;
+  renderHistory();
+});
+
+elements.clearAllChatsBtn?.addEventListener("click", deleteAllChats);
+
+elements.profileToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleProfileMenu();
+});
+
+elements.menuAccount?.addEventListener("click", () => {
+  fillAccountModal();
+  openModal("account-modal");
+});
+
+elements.menuSettings?.addEventListener("click", () => {
+  fillAccountModal();
+  openModal("settings-modal");
+});
+
+elements.menuLogout?.addEventListener("click", () => {
+  closeProfileMenu();
+  logout();
+});
+
+elements.accountCopyEmail?.addEventListener("click", async () => {
+  if (!currentUser?.email) return;
+  try {
+    await navigator.clipboard.writeText(currentUser.email);
+    elements.accountCopyEmail.textContent = "Көшірілді!";
+    setTimeout(() => {
+      elements.accountCopyEmail.textContent = "Email көшіру";
+    }, 1500);
+  } catch {
+    /* ignore */
+  }
+});
+
+elements.settingsClearChats?.addEventListener("click", async () => {
+  closeModal("settings-modal");
+  await deleteAllChats();
+});
+
+elements.settingsLogout?.addEventListener("click", () => {
+  closeModal("settings-modal");
+  logout();
+});
+
+elements.toggleEnterSend?.addEventListener("click", () => {
+  settings.enterToSend = !settings.enterToSend;
+  saveSettings();
+});
+
+elements.toggleEnterSend?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    settings.enterToSend = !settings.enterToSend;
+    saveSettings();
+  }
+});
+
+document.querySelectorAll(".modal-close").forEach((btn) => {
+  btn.addEventListener("click", () => closeModal(btn.dataset.modal));
+});
+
+document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+document.addEventListener("click", (e) => {
+  if (!profileMenuOpen) return;
+  if (
+    elements.profileFooter?.contains(e.target) ||
+    elements.profileMenu?.contains(e.target)
+  ) {
+    return;
+  }
+  closeProfileMenu();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeAllModals();
+    closeProfileMenu();
+  }
+});
 
 elements.newChatBtn.addEventListener("click", startNewChat);
 
@@ -1158,6 +1437,35 @@ elements.authTabRegister?.addEventListener("click", () => setAuthMode("register"
 
 elements.logoutBtn?.addEventListener("click", logout);
 
+elements.shareBtn?.addEventListener("click", async () => {
+  const url = window.location.href;
+  const notify = (msg) => {
+    elements.errorBanner.textContent = msg;
+    elements.errorBanner.className =
+      "max-w-3xl mx-auto mb-2 px-4 py-2 text-sm text-emerald-100 bg-emerald-500/20 border border-emerald-400/30 rounded-xl backdrop-blur-sm";
+    setTimeout(() => {
+      hideError();
+      elements.errorBanner.className =
+        "hidden max-w-3xl mx-auto mb-2 px-4 py-2 text-sm text-red-200 bg-red-500/20 border border-red-400/30 rounded-xl backdrop-blur-sm";
+    }, 2500);
+  };
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "Байеке ИИ", url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      notify("Ссылка көшірілді!");
+    }
+  } catch {
+    try {
+      await navigator.clipboard.writeText(url);
+      notify("Ссылка көшірілді!");
+    } catch {
+      showError(url);
+    }
+  }
+});
+
 
 
 async function bootstrapApp() {
@@ -1181,6 +1489,8 @@ async function bootstrapApp() {
 
 
 async function init() {
+
+  loadSettings();
 
   setAuthMode("login");
 
